@@ -3,7 +3,6 @@
 #include <atomic>
 
 #include "Engine/Source/Runtime/Core/Containers/UnrealString.h"
-#include "Engine/Source/Runtime/Core/Misc/Optional.h"
 #include "Engine/Source/Runtime/Core/UObject/NameTypes.h"
 
 namespace ue5parse::runtime {
@@ -59,7 +58,6 @@ private:
 
 class FTextInspector {
 public:
-    static TOptional<FString> GetKey(const FText& Text);
     static bool GetTableIdAndKey(const FText& Text, FName& OutTableId, FString& OutKey);
 };
 
