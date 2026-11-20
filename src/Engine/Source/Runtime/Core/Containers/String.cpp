@@ -456,6 +456,14 @@ bool FTextInspector::GetTableIdAndKey(const FText& Text, FName& OutTableId, FStr
     return true;
 }
 
+const FString& FText::GetKey() const {
+    return Data ? Data->Key : EmptyString();
+}
+
+bool FText::IsFromStringTable() const {
+    return Data != nullptr && Data->FromStringTable;
+}
+
 bool FText::IdenticalTo(const FText& Other) const {
     if (Data == Other.Data)
         return true;

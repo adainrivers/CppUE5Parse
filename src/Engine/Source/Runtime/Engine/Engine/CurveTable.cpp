@@ -7,41 +7,47 @@
 
 namespace ue5parse::runtime {
 
-void UCurveTable::FinishDestroy() {
-    EmptyTable();
-    Super::FinishDestroy();
+namespace {
+
+template <class CurveType>
+std::unique_ptr<FRealCurve> LoadCurve(FArchive& Ar) {
+    auto Curve = std::make_unique<CurveType>();
+    CurveType::StaticStruct()->SerializeTaggedProperties(Ar, reinterpret_cast<uint8*>(Curve.get()));
+    return Curve;
 }
 
-void UCurveTable::EmptyTable() {
-    for (auto& Pair : RowMap)
-        delete Pair.Value;
-    RowMap.Empty();
 }
 
 void UCurveTable::Serialize(FArchive& Ar) {
     Super::Serialize(Ar);
     if (Ar.IsError())
         return;
-    EmptyTable();
-    const int32 NumRows = Ar.ReadCount(8);
-    if (!Ar.CustomVerAtLeast(FFortniteMainBranchObjectVersion::GUID, FFortniteMainBranchObjectVersion::ShrinkCurveTableSize, EGame::GAME_UE5_0)) {
-        Ar.SetError(ErrorCode::UnsupportedVersion, "UCurveTable.CurveTableMode");
-        return;
-    }
-    Ar << CurveTableMode;
+    RowMap.Empty();
+    int32 NumRows = 0;
+    Ar << NumRows;
+    const bool bUpgradingCurveTable = !Ar.CustomVerAtLeast(FFortniteMainBranchObjectVersion::GUID, FFortniteMainBranchObjectVersion::ShrinkCurveTableSize,
+                                                           EGame::GAME_UE4_22);
+    if (bUpgradingCurveTable)
+        CurveTableMode = NumRows > 0 ? ECurveTableMode::RichCurves : ECurveTableMode::Empty;
+    else
+        Ar.Serialize(&CurveTableMode, sizeof(CurveTableMode));
     for (int32 RowIdx = 0; RowIdx < NumRows && !Ar.IsError(); RowIdx++) {
         FName RowName;
         Ar << RowName;
-        if (CurveTableMode == ECurveTableMode::SimpleCurves) {
-            FSimpleCurve* NewCurve = new FSimpleCurve();
-            FSimpleCurve::StaticStruct()->SerializeTaggedProperties(Ar, reinterpret_cast<uint8*>(NewCurve));
-            RowMap.Add(RowName, NewCurve);
-            continue;
-        }
-        FRichCurve* NewCurve = new FRichCurve();
-        FRichCurve::StaticStruct()->SerializeTaggedProperties(Ar, reinterpret_cast<uint8*>(NewCurve));
-        RowMap.Add(RowName, NewCurve);
+        RowMap.Add(RowName, CurveTableMode == ECurveTableMode::SimpleCurves ? LoadCurve<FSimpleCurve>(Ar) : LoadCurve<FRichCurve>(Ar));
     }
+}
+
+const FRealCurve* UCurveTable::FindCurve(FName RowName) const {
+    const std::unique_ptr<FRealCurve>* Curve = RowMap.Find(RowName);
+    return Curve ? Curve->get() : nullptr;
+}
+
+TArray<FName> UCurveTable::GetRowNames() const {
+    TArray<FName> Names;
+    for (const auto& Pair : RowMap)
+        Names.Add(Pair.Key);
+    return Names;
 }
 
 }
