@@ -427,6 +427,9 @@ bool NiagaraVariableBaseSerialize(FArchive& Ar, void* Data) {
     UScriptStruct* TypeDefinition = Cache.load(std::memory_order_acquire);
     if (TypeDefinition == nullptr)
         TypeDefinition = FindNativeStruct(Cache, "NiagaraTypeDefinition");
+    //! Without mappings a versioned cook has no NiagaraTypeDefinition, so the variable is read as tagged properties.
+    if (TypeDefinition == nullptr)
+        return false;
     Ar << static_cast<FNiagaraVariableBase*>(Data)->Name;
     std::vector<uint8> Value(static_cast<std::size_t>(TypeDefinition->GetStructureSize()));
     TypeDefinition->InitializeStruct(Value.data());
@@ -458,15 +461,17 @@ void SerializeDiscardedStruct(FArchive& Ar, const UScriptStruct* Struct) {
     Struct->DestroyStruct(Value.data());
 }
 bool MovieSceneEvalTemplatePtrSerialize(FArchive& Ar, void*) {
+    //! Without mappings a versioned cook has no MovieSceneEmptyStruct, so the pointer is read as tagged properties.
+    const UScriptStruct* EmptyStruct = FindNativeStruct(FName("MovieSceneEmptyStruct"));
+    if (EmptyStruct == nullptr)
+        return false;
     FString TypeName;
     Ar << TypeName;
     if (TypeName.IsEmpty() || Ar.IsError())
         return true;
     const std::string Path = TypeName.ToUtf8();
     const UScriptStruct* Struct = FindNativeStruct(FName(std::string_view(Path).substr(Path.rfind('.') + 1)));
-    if (Struct == nullptr)
-        Struct = FindNativeStruct(FName("MovieSceneEmptyStruct"));
-    SerializeDiscardedStruct(Ar, Struct);
+    SerializeDiscardedStruct(Ar, Struct != nullptr ? Struct : EmptyStruct);
     return true;
 }
 FCppStructOps MakeMovieSceneEvalTemplatePtrOps() {
