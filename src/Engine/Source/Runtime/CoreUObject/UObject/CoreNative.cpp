@@ -24,8 +24,8 @@
 #include "Engine/Source/Runtime/MovieScene/Channels/MovieSceneDoubleChannel.h"
 #include "Engine/Source/Runtime/MovieScene/Channels/MovieSceneFloatChannel.h"
 #include "Engine/Source/Runtime/MovieScene/Evaluation/MovieSceneEvaluationField.h"
-#include "Engine/Source/Runtime/MovieScene/Evaluation/MovieSceneEvalTemplateSerializer.h"
 #include "Engine/Source/Runtime/MovieScene/Evaluation/MovieSceneSequenceHierarchy.h"
+#include "Engine/Source/Runtime/MovieScene/Evaluation/MovieSceneEvalTemplateSerializer.h"
 #include "Engine/Source/Runtime/MovieScene/MovieSceneFrameMigration.h"
 #include "Engine/Source/Runtime/MovieScene/Variants/MovieSceneTimeWarpVariant.h"
 #include "Engine/Source/Runtime/UniversalObjectLocator/UniversalObjectLocatorFragment.h"
@@ -874,6 +874,7 @@ const FNativeStructInfo CoreStructs[] = {
     {"/Script/MovieScene", "MovieSceneEvaluationKey", &Opaque12Ops},
     {"/Script/MovieScene", "MovieSceneSubSequenceTree", &MovieSceneSubSequenceTreeOps},
     {"/Script/MovieScene", "MovieSceneWarpCounter", &MovieSceneWarpCounterOps, MovieSceneWarpCounterMembers},
+    {"/Script/MovieScene", "MovieSceneSequenceInstanceDataPtr", &MovieSceneInlineValueOps},
     {"/Script/MovieScene", "MovieSceneFrameRange", &MovieSceneFrameRangeOps},
     {"/Script/MovieScene", "MovieSceneEvaluationFieldEntityTree", &MovieSceneEvaluationFieldEntityTreeOps},
     {"/Script/MovieScene", "MovieSceneTangentData", &MovieSceneTangentDataOps, MovieSceneTangentDataMembers},
