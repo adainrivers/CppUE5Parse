@@ -775,6 +775,7 @@ const FNativeEnumInfo CoreEnums[] = {
 };
 
 const FCppStructOps ControlRigOverrideContainerOps = TCppStructOps<FControlRigOverrideContainer>();
+const FNativeMember InstancedPropertyBagMembers[] = {{"Value", "Struct:InstancedStruct", FInstancedPropertyBag::GetValueOffset(), sizeof(FInstancedStruct)}};
 
 const FNativeStructInfo CoreStructs[] = {
     {"/Script/ControlRig", "ControlRigOverrideContainer", &ControlRigOverrideContainerOps},
@@ -858,8 +859,8 @@ const FNativeStructInfo CoreStructs[] = {
     {CoreUObjectPackage, "InstancedStruct", &InstancedStructOps},
     {"/Script/UniversalObjectLocator", "UniversalObjectLocatorFragment", &UniversalObjectLocatorFragmentOps},
     {CoreUObjectPackage, "InstancedStructContainer", &InstancedStructContainerOps},
-    {CoreUObjectPackage, "InstancedPropertyBag", &InstancedPropertyBagOps},
-    {"/Script/RigVM", "RigVMPropertyBag", &InstancedPropertyBagOps},
+    {CoreUObjectPackage, "InstancedPropertyBag", &InstancedPropertyBagOps, InstancedPropertyBagMembers},
+    {"/Script/RigVM", "RigVMPropertyBag", &InstancedPropertyBagOps, {}, "InstancedPropertyBag"},
     {CoreUObjectPackage, "Int32RangeBound", &Int32RangeBoundOps, Int32RangeBoundMembers},
     {CoreUObjectPackage, "Int32Range", &Int32RangeOps, Int32RangeMembers},
     {CoreUObjectPackage, "InterpCurvePointFloat", &InterpCurvePointFloatOps, InterpCurvePointFloatMembers},
