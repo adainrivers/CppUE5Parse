@@ -6,8 +6,9 @@
 #include <vector>
 
 #include "Engine/Plugins/Animation/ControlRig/Source/ControlRig/ControlRigOverride.h"
-#include "Engine/Plugins/FX/Niagara/Source/Niagara/NiagaraTypes.h"
-#include "Engine/Plugins/FX/Niagara/Source/NiagaraShader/NiagaraShared.h"
+#include "Engine/Source/Runtime/MovieScene/Variants/MovieSceneTimeWarpVariant.h"
+#include "Engine/Source/Runtime/MovieSceneTracks/Sections/MovieSceneEventSection.h"
+
 #include "Engine/Source/Runtime/Core/Math/Axis.h"
 #include "Engine/Source/Runtime/Core/Math/InterpCurve.h"
 #include "Engine/Source/Runtime/Core/PixelFormat.h"
@@ -22,15 +23,7 @@
 #include "Engine/Source/Runtime/CoreUObject/UObject/SoftObjectPtr.h"
 #include "Engine/Source/Runtime/CoreUObject/UObject/UObjectGlobals.h"
 #include "Engine/Source/Runtime/CoreUObject/UObject/UnrealTypePrivate.h"
-#include "Engine/Source/Runtime/MovieScene/Channels/MovieSceneDoubleChannel.h"
-#include "Engine/Source/Runtime/MovieScene/Channels/MovieSceneFloatChannel.h"
-#include "Engine/Source/Runtime/MovieScene/Evaluation/MovieSceneEvaluationField.h"
-#include "Engine/Source/Runtime/MovieScene/Evaluation/MovieSceneSequenceHierarchy.h"
-#include "Engine/Source/Runtime/MovieScene/Evaluation/MovieSceneEvalTemplateSerializer.h"
-#include "Engine/Source/Runtime/MovieSceneTracks/Sections/MovieSceneEventSection.h"
 #include "Engine/Source/Runtime/MovieScene/MovieSceneFrameMigration.h"
-#include "Engine/Source/Runtime/MovieScene/Variants/MovieSceneTimeWarpVariant.h"
-#include "Engine/Source/Runtime/UniversalObjectLocator/UniversalObjectLocatorFragment.h"
 
 //! A struct that cooked data serializes natively must have its C++ operations here, else its holder's stream cannot be read.
 
@@ -301,7 +294,26 @@ const FCppStructOps SoftObjectPathOps = MakeSoftObjectPathOps();
 bool TopLevelAssetPathIdentical(const void* A, const void* B) {
     return *static_cast<const FTopLevelAssetPath*>(A) == *static_cast<const FTopLevelAssetPath*>(B);
 }
-const FCppStructOps TopLevelAssetPathOps = ObjectStructOps<FTopLevelAssetPath>(nullptr, &TopLevelAssetPathIdentical);
+bool TopLevelAssetPathSerializeFromMismatchedTag(const FPropertyTag& Tag, FArchive& Ar, void* Data) {
+    FString Path;
+    if (Tag.Type == FName("NameProperty")) {
+        FName Name;
+        Ar << Name;
+        Path = NameToString(Name);
+    } else if (Tag.Type == FName("StrProperty")) {
+        Ar << Path;
+    } else {
+        return false;
+    }
+    *static_cast<FTopLevelAssetPath*>(Data) = FSoftObjectPath(Path).AssetPath;
+    return true;
+}
+FCppStructOps MakeTopLevelAssetPathOps() {
+    FCppStructOps Ops = ObjectStructOps<FTopLevelAssetPath>(nullptr, &TopLevelAssetPathIdentical);
+    Ops.SerializeFromMismatchedTag = &TopLevelAssetPathSerializeFromMismatchedTag;
+    return Ops;
+}
+const FCppStructOps TopLevelAssetPathOps = MakeTopLevelAssetPathOps();
 
 template <class T, class TValue>
 bool PerPlatformSerialize(FArchive& Ar, void* Data) {
@@ -373,7 +385,6 @@ const FCppStructOps PerQualityLevelFloatOps =
     ObjectStructOps<FPerQualityLevelFloat>(&PerQualitySerialize<FPerQualityLevelFloat, float>, &PerPlatformIdentical<FPerQualityLevelFloat>);
 
 const FCppStructOps InstancedStructOps = TCppStructOps<FInstancedStruct>();
-const FCppStructOps UniversalObjectLocatorFragmentOps = TCppStructOps<FUniversalObjectLocatorFragment>();
 const FCppStructOps InstancedStructContainerOps = TCppStructOps<FInstancedStructContainer>();
 const FCppStructOps InstancedPropertyBagOps = TCppStructOps<FInstancedPropertyBag>();
 
@@ -421,88 +432,29 @@ bool MovieSceneFrameRangeSerialize(FArchive& Ar, void* Data) {
 bool MovieSceneFrameRangeIdentical(const void* A, const void* B) {
     return *static_cast<const FMovieSceneFrameRange*>(A) == *static_cast<const FMovieSceneFrameRange*>(B);
 }
-const FCppStructOps MovieSceneFrameRangeOps = ObjectStructOps<FMovieSceneFrameRange>(&MovieSceneFrameRangeSerialize, &MovieSceneFrameRangeIdentical);
-const FCppStructOps MovieSceneEvaluationFieldEntityTreeOps = TCppStructOps<FMovieSceneEvaluationFieldEntityTree>();
-
-template <class T>
-bool OpIdenticalValues(const void* A, const void* B) {
-    return *static_cast<const T*>(A) == *static_cast<const T*>(B);
-}
-
-static_assert(sizeof(FMovieSceneFloatValue) == 28 && sizeof(FMovieSceneDoubleValue) == 32);
-
-//! The engine reads the array element by element when the stored element size is not the size of its type; that path is not ported.
-template <class TElement>
-void SerializeMovieSceneChannelArray(FArchive& Ar, TArray<TElement>& Array) {
-    int32 SerializedElementSize = 0;
-    Ar << SerializedElementSize;
-    if (Ar.IsError())
-        return;
-    if (SerializedElementSize != static_cast<int32>(sizeof(TElement))) {
-        Ar.SetError(ErrorCode::UnsupportedVersion, "MovieSceneCurveChannel.ElementSize");
-        return;
-    }
-    Array.SetNum(Ar.ReadCount(SerializedElementSize));
-    Ar.Serialize(Array.GetData(), static_cast<int64>(Array.Num()) * SerializedElementSize);
-}
-template <class TChannel>
-bool MovieSceneCurveChannelSerialize(FArchive& Ar, void* Data) {
-    auto& Channel = *static_cast<TChannel*>(Data);
-    Ar << Channel.PreInfinityExtrap << Channel.PostInfinityExtrap;
-    SerializeMovieSceneChannelArray(Ar, Channel.Times);
-    if (!Ar.IsError())
-        SerializeMovieSceneChannelArray(Ar, Channel.Values);
-    bool bShowCurve = false;
-    Ar << Channel.DefaultValue << Channel.bHasDefaultValue << Channel.TickResolution.Numerator << Channel.TickResolution.Denominator << bShowCurve;
-    return true;
-}
-const FCppStructOps MovieSceneTangentDataOps = ObjectStructOps<FMovieSceneTangentData>(nullptr, &OpIdenticalValues<FMovieSceneTangentData>);
-const FCppStructOps MovieSceneFloatValueOps = ObjectStructOps<FMovieSceneFloatValue>(nullptr, &OpIdenticalValues<FMovieSceneFloatValue>);
-const FCppStructOps MovieSceneDoubleValueOps = ObjectStructOps<FMovieSceneDoubleValue>(nullptr, &OpIdenticalValues<FMovieSceneDoubleValue>);
-const FCppStructOps MovieSceneFloatChannelOps =
-    ObjectStructOps<FMovieSceneFloatChannel>(&MovieSceneCurveChannelSerialize<FMovieSceneFloatChannel>, &OpIdenticalValues<FMovieSceneFloatChannel>);
-const FCppStructOps MovieSceneDoubleChannelOps =
-    ObjectStructOps<FMovieSceneDoubleChannel>(&MovieSceneCurveChannelSerialize<FMovieSceneDoubleChannel>, &OpIdenticalValues<FMovieSceneDoubleChannel>);
-bool NiagaraVariableBaseSerialize(FArchive& Ar, void* Data) {
-    if (!Ar.CustomVerAtLeast(FNiagaraCustomVersion::GUID, FNiagaraCustomVersion::VariablesUseTypeDefRegistry, EGame::GAME_UE5_3))
+bool MovieSceneFrameRangeSerializeFromMismatchedTag(const FPropertyTag& Tag, FArchive& Ar, void* Data) {
+    if (Tag.Type != FName("StructProperty") || Tag.TypeName.GetParameterName(0) != FName("FloatRange"))
         return false;
     static constinit std::atomic<UScriptStruct*> Cache = nullptr;
-    UScriptStruct* TypeDefinition = Cache.load(std::memory_order_acquire);
-    if (TypeDefinition == nullptr)
-        TypeDefinition = FindNativeStruct(Cache, "NiagaraTypeDefinition");
-    //! Without mappings a versioned cook has no NiagaraTypeDefinition, so the variable is read as tagged properties.
-    if (TypeDefinition == nullptr)
-        return false;
-    Ar << static_cast<FNiagaraVariableBase*>(Data)->Name;
-    std::vector<uint8> Value(static_cast<std::size_t>(TypeDefinition->GetStructureSize()));
-    TypeDefinition->InitializeStruct(Value.data());
-    TypeDefinition->SerializeItem(Ar, Value.data());
-    TypeDefinition->DestroyStruct(Value.data());
+    UScriptStruct* FloatRangeStruct = Cache.load(std::memory_order_acquire);
+    if (FloatRangeStruct == nullptr)
+        FloatRangeStruct = FindNativeStruct(Cache, "FloatRange");
+    FFloatRange FloatRange;
+    FloatRangeStruct->SerializeItem(Ar, &FloatRange);
+    auto& Range = *static_cast<FMovieSceneFrameRange*>(Data);
+    Range.LowerBound = UpgradeLegacyRangeBound(FloatRange.LowerBound);
+    Range.UpperBound = UpgradeLegacyRangeBound(FloatRange.UpperBound);
     return true;
 }
-bool NiagaraVariableSerialize(FArchive& Ar, void* Data) {
-    if (!NiagaraVariableBaseSerialize(Ar, Data))
-        return false;
-    Ar << static_cast<FNiagaraVariable*>(Data)->VarData;
-    return true;
+FCppStructOps MakeMovieSceneFrameRangeOps() {
+    FCppStructOps Ops = ObjectStructOps<FMovieSceneFrameRange>(&MovieSceneFrameRangeSerialize, &MovieSceneFrameRangeIdentical);
+    Ops.SerializeFromMismatchedTag = &MovieSceneFrameRangeSerializeFromMismatchedTag;
+    return Ops;
 }
-bool NiagaraVariableWithOffsetSerialize(FArchive& Ar, void* Data) {
-    if (!NiagaraVariableBaseSerialize(Ar, Data))
-        return false;
-    Ar << static_cast<FNiagaraVariableWithOffset*>(Data)->Offset;
-    return true;
-}
-const FCppStructOps NiagaraTypeDefinitionHandleOps = TCppStructOps<FNiagaraTypeDefinitionHandle>();
-const FCppStructOps NiagaraVariableBaseOps = ObjectStructOps<FNiagaraVariableBase>(&NiagaraVariableBaseSerialize, &OpIdenticalValues<FNiagaraVariableBase>);
-const FCppStructOps NiagaraVariableOps = ObjectStructOps<FNiagaraVariable>(&NiagaraVariableSerialize, &OpIdenticalValues<FNiagaraVariable>);
-const FCppStructOps NiagaraVariableWithOffsetOps =
-    ObjectStructOps<FNiagaraVariableWithOffset>(&NiagaraVariableWithOffsetSerialize, &OpIdenticalValues<FNiagaraVariableWithOffset>);
-const FCppStructOps MovieSceneInlineValueOps = TCppStructOps<FMovieSceneInlineValue>();
-const FCppStructOps MovieSceneTimeWarpVariantOps = TCppStructOps<FMovieSceneTimeWarpVariant>();
-const FCppStructOps MovieSceneEventParametersOps = TCppStructOps<FMovieSceneEventParameters>();
+const FCppStructOps MovieSceneFrameRangeOps = MakeMovieSceneFrameRangeOps();
+
 const FCppStructOps Opaque4Ops = OpaqueStructOps<4>();
 const FCppStructOps Opaque8Ops = OpaqueStructOps<8>();
-const FCppStructOps Opaque12Ops = OpaqueStructOps<12>();
 const FCppStructOps Opaque32Ops = OpaqueStructOps<32>();
 const FCppStructOps Opaque80Ops = OpaqueStructOps<80>();
 
@@ -554,51 +506,7 @@ const FNativeMember Box2DMembers[] = {MEMBER(FBox2D, "Min", "Struct:Vector2D", M
 const FNativeMember DateTimeMembers[] = {MEMBER(FDateTime, "Ticks", "int64", Ticks)};
 const FNativeMember TimespanMembers[] = {MEMBER(FTimespan, "Ticks", "int64", Ticks)};
 const FNativeMember RandomStreamMembers[] = {MEMBER(FRandomStream, "InitialSeed", "int32", InitialSeed), MEMBER(FRandomStream, "Seed", "int32", Seed)};
-const FCppStructOps MovieSceneSubSequenceTreeOps = TCppStructOps<FMovieSceneSubSequenceTree>();
-const FCppStructOps MovieSceneWarpCounterOps = TCppStructOps<FMovieSceneWarpCounter>();
-const FNativeMember MovieSceneWarpCounterMembers[] = {MEMBER(FMovieSceneWarpCounter, "WarpCounts", "Array<uint32>", WarpCounts)};
 const FNativeMember FrameNumberMembers[] = {MEMBER(FFrameNumber, "Value", "int32", Value)};
-const FNativeMember NiagaraTypeDefinitionHandleMembers[] = {MEMBER(FNiagaraTypeDefinitionHandle, "RegisteredTypeIndex", "int32", RegisteredTypeIndex)};
-const FCppStructOps NiagaraVariableCommonReferenceOps = TCppStructOps<FNiagaraVariableCommonReference>();
-const FNativeMember NiagaraVariableCommonReferenceMembers[] = {
-    MEMBER(FNiagaraVariableCommonReference, "Name", "Name", Name),
-    MEMBER(FNiagaraVariableCommonReference, "UnderlyingType", "Object:Object", UnderlyingType)};
-const FCppStructOps NiagaraDataInterfaceGeneratedFunctionOps = TCppStructOps<FNiagaraDataInterfaceGeneratedFunction>();
-const FNativeMember NiagaraDataInterfaceGeneratedFunctionMembers[] = {
-    MEMBER(FNiagaraDataInterfaceGeneratedFunction, "VariadicInputs", "Array<Struct:NiagaraVariableCommonReference>", VariadicInputs),
-    MEMBER(FNiagaraDataInterfaceGeneratedFunction, "VariadicOutputs", "Array<Struct:NiagaraVariableCommonReference>", VariadicOutputs)};
-const FCppStructOps NiagaraDataInterfaceGPUParamInfoOps = TCppStructOps<FNiagaraDataInterfaceGPUParamInfo>();
-const FNativeMember NiagaraDataInterfaceGPUParamInfoMembers[] = {
-    MEMBER(FNiagaraDataInterfaceGPUParamInfo, "DataInterfaceHLSLSymbol", "Str", DataInterfaceHLSLSymbol),
-    MEMBER(FNiagaraDataInterfaceGPUParamInfo, "DIClassName", "Str", DIClassName),
-    MEMBER(FNiagaraDataInterfaceGPUParamInfo, "ShaderParametersOffset", "uint32", ShaderParametersOffset),
-    MEMBER(FNiagaraDataInterfaceGPUParamInfo, "GeneratedFunctions", "Array<Struct:NiagaraDataInterfaceGeneratedFunction>", GeneratedFunctions)};
-const FNativeMember NiagaraVariableBaseMembers[] = {MEMBER(FNiagaraVariableBase, "Name", "Name", Name),
-                                                    MEMBER(FNiagaraVariableBase, "TypeDefHandle", "Struct:NiagaraTypeDefinitionHandle", TypeDefHandle)};
-const FNativeMember NiagaraVariableMembers[] = {MEMBER(FNiagaraVariable, "VarData", "Array<uint8>", VarData)};
-const FNativeMember NiagaraVariableWithOffsetMembers[] = {MEMBER(FNiagaraVariableWithOffset, "Offset", "int32", Offset)};
-const FNativeMember MovieSceneTangentDataMembers[] = {
-    MEMBER(FMovieSceneTangentData, "ArriveTangent", "float", ArriveTangent), MEMBER(FMovieSceneTangentData, "LeaveTangent", "float", LeaveTangent),
-    MEMBER(FMovieSceneTangentData, "ArriveTangentWeight", "float", ArriveTangentWeight),
-    MEMBER(FMovieSceneTangentData, "LeaveTangentWeight", "float", LeaveTangentWeight),
-    MEMBER(FMovieSceneTangentData, "TangentWeightMode", "Byte:ERichCurveTangentWeightMode", TangentWeightMode)};
-#define MOVIE_SCENE_CURVE_MEMBERS(TKind, TScriptType)                                                                                                          \
-    const FNativeMember MovieScene##TKind##ValueMembers[] = {MEMBER(FMovieScene##TKind##Value, "Value", TScriptType, Value),                                   \
-                                                             MEMBER(FMovieScene##TKind##Value, "Tangent", "Struct:MovieSceneTangentData", Tangent),            \
-                                                             MEMBER(FMovieScene##TKind##Value, "InterpMode", "Byte:ERichCurveInterpMode", InterpMode),         \
-                                                             MEMBER(FMovieScene##TKind##Value, "TangentMode", "Byte:ERichCurveTangentMode", TangentMode),      \
-                                                             MEMBER(FMovieScene##TKind##Value, "PaddingByte", "uint8", PaddingByte)};                          \
-    const FNativeMember MovieScene##TKind##ChannelMembers[] = {                                                                                                \
-        MEMBER(FMovieScene##TKind##Channel, "PreInfinityExtrap", "Byte:ERichCurveExtrapolation", PreInfinityExtrap),                                           \
-        MEMBER(FMovieScene##TKind##Channel, "PostInfinityExtrap", "Byte:ERichCurveExtrapolation", PostInfinityExtrap),                                         \
-        MEMBER(FMovieScene##TKind##Channel, "Times", "Array<Struct:FrameNumber>", Times),                                                                      \
-        MEMBER(FMovieScene##TKind##Channel, "Values", "Array<Struct:MovieScene" #TKind "Value>", Values),                                                      \
-        MEMBER(FMovieScene##TKind##Channel, "DefaultValue", TScriptType, DefaultValue),                                                                        \
-        MEMBER(FMovieScene##TKind##Channel, "bHasDefaultValue", "bool", bHasDefaultValue),                                                                     \
-        MEMBER(FMovieScene##TKind##Channel, "TickResolution", "Struct:FrameRate", TickResolution)};
-MOVIE_SCENE_CURVE_MEMBERS(Float, "float")
-MOVIE_SCENE_CURVE_MEMBERS(Double, "double")
-#undef MOVIE_SCENE_CURVE_MEMBERS
 const FNativeMember InputDeviceIdMembers[] = {MEMBER(FInputDeviceId, "InternalId", "int32", InternalId)};
 const FNativeMember FrameRateMembers[] = {MEMBER(FFrameRate, "Numerator", "int32", Numerator), MEMBER(FFrameRate, "Denominator", "int32", Denominator)};
 const FNativeMember PerPlatformFrameRateMembers[] = {MEMBER(FPerPlatformFrameRate, "Default", "Struct:FrameRate", Default)};
@@ -609,6 +517,7 @@ const FNativeMember SoftObjectPathMembers[] = {MEMBER(FSoftObjectPath, "AssetPat
 const FNativeMember FloatIntervalMembers[] = {MEMBER(FFloatInterval, "Min", "float", Min), MEMBER(FFloatInterval, "Max", "float", Max)};
 const FNativeMember Int32IntervalMembers[] = {MEMBER(FInt32Interval, "Min", "int32", Min), MEMBER(FInt32Interval, "Max", "int32", Max)};
 const FNativeMember DirectoryPathMembers[] = {MEMBER(FDirectoryPath, "Path", "Str", Path)};
+const FNativeMember FilePathMembers[] = {MEMBER(FFilePath, "FilePath", "Str", FilePath)};
 const FNativeMember PerPlatformIntMembers[] = {MEMBER(FPerPlatformInt, "Default", "int32", Default)};
 const FNativeMember PerPlatformFloatMembers[] = {MEMBER(FPerPlatformFloat, "Default", "float", Default)};
 const FNativeMember PerPlatformBoolMembers[] = {MEMBER(FPerPlatformBool, "Default", "bool", Default)};
@@ -645,8 +554,27 @@ const FNativeMember Int32RangeMembers[] = {MEMBER(FInt32Range, "LowerBound", "St
 const FCppStructOps FloatIntervalOps = TCppStructOps<FFloatInterval>();
 const FCppStructOps Int32IntervalOps = TCppStructOps<FInt32Interval>();
 const FCppStructOps DirectoryPathOps = TCppStructOps<FDirectoryPath>();
+const FCppStructOps FilePathOps = TCppStructOps<FFilePath>();
 const FCppStructOps Int32RangeBoundOps = TCppStructOps<FInt32RangeBound>();
 const FCppStructOps Int32RangeOps = TCppStructOps<FInt32Range>();
+const FNativeMember FloatRangeBoundMembers[] = {MEMBER(FFloatRangeBound, "Type", "Byte:ERangeBoundTypes", Type),
+                                                MEMBER(FFloatRangeBound, "Value", "float", Value)};
+const FNativeMember FloatRangeMembers[] = {MEMBER(FFloatRange, "LowerBound", "Struct:FloatRangeBound", LowerBound),
+                                           MEMBER(FFloatRange, "UpperBound", "Struct:FloatRangeBound", UpperBound)};
+const FNativeMember FrameNumberRangeBoundMembers[] = {MEMBER(FFrameNumberRangeBound, "Type", "Byte:ERangeBoundTypes", Type),
+                                                      MEMBER(FFrameNumberRangeBound, "Value", "Struct:FrameNumber", Value)};
+const FNativeMember FrameNumberRangeMembers[] = {MEMBER(FFrameNumberRange, "LowerBound", "Struct:FrameNumberRangeBound", LowerBound),
+                                                 MEMBER(FFrameNumberRange, "UpperBound", "Struct:FrameNumberRangeBound", UpperBound)};
+const FNativeMember FrameTimeMembers[] = {MEMBER(FFrameTime, "FrameNumber", "Struct:FrameNumber", FrameNumber), MEMBER(FFrameTime, "SubFrame", "float", SubFrame)};
+const FCppStructOps FrameNumberRangeBoundOps = TCppStructOps<FFrameNumberRangeBound>();
+const FCppStructOps FrameNumberRangeOps = TCppStructOps<FFrameNumberRange>();
+const FCppStructOps FrameTimeOps = TCppStructOps<FFrameTime>();
+const FCppStructOps FloatRangeBoundOps = TCppStructOps<FFloatRangeBound>();
+const FCppStructOps FloatRangeOps = TCppStructOps<FFloatRange>();
+const FNativeMember TimecodeMembers[] = {MEMBER(FTimecode, "Hours", "int32", Hours),       MEMBER(FTimecode, "Minutes", "int32", Minutes),
+                                         MEMBER(FTimecode, "Seconds", "int32", Seconds),   MEMBER(FTimecode, "Frames", "int32", Frames),
+                                         MEMBER(FTimecode, "Subframe", "float", Subframe), MEMBER(FTimecode, "bDropFrameFormat", "bool", bDropFrameFormat)};
+const FCppStructOps TimecodeOps = TCppStructOps<FTimecode>();
 const FCppStructOps InterpCurvePointFloatOps = TCppStructOps<FInterpCurvePointFloat>();
 const FCppStructOps InterpCurveFloatOps = TCppStructOps<FInterpCurveFloat>();
 const FCppStructOps InterpCurvePointVectorOps = TCppStructOps<FInterpCurvePointVector>();
@@ -774,11 +702,15 @@ const FNativeEnumInfo CoreEnums[] = {
     {CoreUObjectPackage, "EPixelFormat", PixelFormatNames},
 };
 
+const FCppStructOps MovieSceneTimeWarpVariantOps = TCppStructOps<FMovieSceneTimeWarpVariant>();
+const FCppStructOps MovieSceneEventParametersOps = TCppStructOps<FMovieSceneEventParameters>();
 const FCppStructOps ControlRigOverrideContainerOps = TCppStructOps<FControlRigOverrideContainer>();
 const FNativeMember InstancedPropertyBagMembers[] = {{"Value", "Struct:InstancedStruct", FInstancedPropertyBag::GetValueOffset(), sizeof(FInstancedStruct)}};
 
 const FNativeStructInfo CoreStructs[] = {
     {"/Script/ControlRig", "ControlRigOverrideContainer", &ControlRigOverrideContainerOps},
+    {"/Script/MovieSceneTracks", "MovieSceneEventParameters", &MovieSceneEventParametersOps},
+    {"/Script/MovieScene", "MovieSceneTimeWarpVariant", &MovieSceneTimeWarpVariantOps},
     {CoreUObjectPackage, "Vector", &VectorOps, VectorMembers},
     {CoreUObjectPackage, "Vector3d", &VectorOps, VectorMembers},
     {CoreUObjectPackage, "Vector2D", &Vector2DOps, Vector2DMembers},
@@ -848,6 +780,7 @@ const FNativeStructInfo CoreStructs[] = {
     {CoreUObjectPackage, "FloatInterval", &FloatIntervalOps, FloatIntervalMembers},
     {CoreUObjectPackage, "Int32Interval", &Int32IntervalOps, Int32IntervalMembers},
     {CoreUObjectPackage, "DirectoryPath", &DirectoryPathOps, DirectoryPathMembers},
+    {CoreUObjectPackage, "FilePath", &FilePathOps, FilePathMembers},
     {CoreUObjectPackage, "StringClassReference", &SoftObjectPathOps},
     {CoreUObjectPackage, "PerPlatformInt", &PerPlatformIntOps, PerPlatformIntMembers},
     {CoreUObjectPackage, "PerPlatformFloat", &PerPlatformFloatOps, PerPlatformFloatMembers},
@@ -857,12 +790,17 @@ const FNativeStructInfo CoreStructs[] = {
     {CoreUObjectPackage, "PerQualityLevelInt", &PerQualityLevelIntOps, PerQualityLevelIntMembers},
     {CoreUObjectPackage, "PerQualityLevelFloat", &PerQualityLevelFloatOps, PerQualityLevelFloatMembers},
     {CoreUObjectPackage, "InstancedStruct", &InstancedStructOps},
-    {"/Script/UniversalObjectLocator", "UniversalObjectLocatorFragment", &UniversalObjectLocatorFragmentOps},
     {CoreUObjectPackage, "InstancedStructContainer", &InstancedStructContainerOps},
     {CoreUObjectPackage, "InstancedPropertyBag", &InstancedPropertyBagOps, InstancedPropertyBagMembers},
     {"/Script/RigVM", "RigVMPropertyBag", &InstancedPropertyBagOps, {}, "InstancedPropertyBag"},
     {CoreUObjectPackage, "Int32RangeBound", &Int32RangeBoundOps, Int32RangeBoundMembers},
     {CoreUObjectPackage, "Int32Range", &Int32RangeOps, Int32RangeMembers},
+    {CoreUObjectPackage, "FrameNumberRangeBound", &FrameNumberRangeBoundOps, FrameNumberRangeBoundMembers},
+    {CoreUObjectPackage, "FrameNumberRange", &FrameNumberRangeOps, FrameNumberRangeMembers},
+    {CoreUObjectPackage, "FrameTime", &FrameTimeOps, FrameTimeMembers},
+    {CoreUObjectPackage, "FloatRangeBound", &FloatRangeBoundOps, FloatRangeBoundMembers},
+    {CoreUObjectPackage, "FloatRange", &FloatRangeOps, FloatRangeMembers},
+    {CoreUObjectPackage, "Timecode", &TimecodeOps, TimecodeMembers},
     {CoreUObjectPackage, "InterpCurvePointFloat", &InterpCurvePointFloatOps, InterpCurvePointFloatMembers},
     {CoreUObjectPackage, "InterpCurveFloat", &InterpCurveFloatOps, InterpCurveFloatMembers},
     {CoreUObjectPackage, "InterpCurvePointVector", &InterpCurvePointVectorOps, InterpCurvePointVectorMembers},
@@ -870,32 +808,7 @@ const FNativeStructInfo CoreStructs[] = {
     {CoreUObjectPackage, "InterpCurvePointQuat", &InterpCurvePointQuatOps, InterpCurvePointQuatMembers},
     {CoreUObjectPackage, "InterpCurveQuat", &InterpCurveQuatOps, InterpCurveQuatMembers},
     {"/Script/SlateCore", "DeprecateSlateVector2D", &Opaque8Ops},
-    {"/Script/MovieSceneTracks", "MovieSceneEventParameters", &MovieSceneEventParametersOps},
-    {"/Script/NavigationSystem", "NavAgentSelector", &Opaque4Ops},
-    {"/Script/MovieScene", "MovieSceneEvalTemplatePtr", &MovieSceneInlineValueOps},
-    {"/Script/MovieScene", "MovieSceneTrackImplementationPtr", &MovieSceneInlineValueOps},
-    {"/Script/MovieScene", "MovieSceneTimeWarpVariant", &MovieSceneTimeWarpVariantOps},
-    {"/Script/MovieScene", "MovieSceneEvaluationKey", &Opaque12Ops},
-    {"/Script/MovieScene", "MovieSceneSubSequenceTree", &MovieSceneSubSequenceTreeOps},
-    {"/Script/MovieScene", "MovieSceneWarpCounter", &MovieSceneWarpCounterOps, MovieSceneWarpCounterMembers},
-    {"/Script/MovieScene", "MovieSceneSequenceInstanceDataPtr", &MovieSceneInlineValueOps},
     {"/Script/MovieScene", "MovieSceneFrameRange", &MovieSceneFrameRangeOps},
-    {"/Script/MovieScene", "MovieSceneEvaluationFieldEntityTree", &MovieSceneEvaluationFieldEntityTreeOps},
-    {"/Script/MovieScene", "MovieSceneTangentData", &MovieSceneTangentDataOps, MovieSceneTangentDataMembers},
-    {"/Script/MovieScene", "MovieSceneDoubleValue", &MovieSceneDoubleValueOps, MovieSceneDoubleValueMembers},
-    {"/Script/MovieScene", "MovieSceneDoubleChannel", &MovieSceneDoubleChannelOps, MovieSceneDoubleChannelMembers},
-    {"/Script/MovieScene", "MovieSceneFloatValue", &MovieSceneFloatValueOps, MovieSceneFloatValueMembers},
-    {"/Script/MovieScene", "MovieSceneFloatChannel", &MovieSceneFloatChannelOps, MovieSceneFloatChannelMembers},
-    {"/Script/MovieScene", "MovieSceneSegmentIdentifier", &Opaque4Ops},
-    {"/Script/MovieScene", "MovieSceneSequenceID", &Opaque4Ops},
-    {"/Script/MovieScene", "MovieSceneTrackIdentifier", &Opaque4Ops},
-    {"/Script/Niagara", "NiagaraTypeDefinitionHandle", &NiagaraTypeDefinitionHandleOps, NiagaraTypeDefinitionHandleMembers},
-    {"/Script/Niagara", "NiagaraVariableBase", &NiagaraVariableBaseOps, NiagaraVariableBaseMembers},
-    {"/Script/NiagaraCore", "NiagaraVariableCommonReference", &NiagaraVariableCommonReferenceOps, NiagaraVariableCommonReferenceMembers},
-    {"/Script/NiagaraShader", "NiagaraDataInterfaceGeneratedFunction", &NiagaraDataInterfaceGeneratedFunctionOps, NiagaraDataInterfaceGeneratedFunctionMembers},
-    {"/Script/NiagaraShader", "NiagaraDataInterfaceGPUParamInfo", &NiagaraDataInterfaceGPUParamInfoOps, NiagaraDataInterfaceGPUParamInfoMembers},
-    {"/Script/Niagara", "NiagaraVariable", &NiagaraVariableOps, NiagaraVariableMembers},
-    {"/Script/Niagara", "NiagaraVariableWithOffset", &NiagaraVariableWithOffsetOps, NiagaraVariableWithOffsetMembers},
     {CoreUObjectPackage, "UInt32Property", &Opaque4Ops},
     {"/Script/ClothingSystemRuntimeCommon", "ClothTetherData", &ClothTetherDataOps},
     {"/Script/ClothingSystemRuntimeCommon", "ClothLODDataCommon", &ClothLODDataCommonOps},

@@ -1,24 +1,39 @@
 #pragma once
 
-#include "Engine/Source/Runtime/Core/Containers/EnumAsByte.h"
-#include "Engine/Source/Runtime/CoreUObject/UObject/PropertyAccess.h"
+#include "Engine/Source/Runtime/Engine/Curves/RealCurve.h"
+#include "Engine/Source/Runtime/MovieScene/Channels/MovieSceneChannel.h"
+
+#include "MovieSceneCurveChannelCommon.generated.h"
 
 namespace ue5parse::runtime {
 
-enum ERichCurveInterpMode : int32;
-enum ERichCurveTangentMode : int32;
-enum ERichCurveTangentWeightMode : int32;
-enum ERichCurveExtrapolation : int32;
-
+USTRUCT()
 struct FMovieSceneTangentData {
-    float ArriveTangent = 0.f;
-    float LeaveTangent = 0.f;
-    float ArriveTangentWeight = 0.f;
-    float LeaveTangentWeight = 0.f;
-    TEnumAsByte<ERichCurveTangentWeightMode> TangentWeightMode = static_cast<ERichCurveTangentWeightMode>(0);
-    bool operator==(const FMovieSceneTangentData&) const = default;
+    GENERATED_BODY()
+
+    UPROPERTY()
+    float ArriveTangent = 0;
+    UPROPERTY()
+    float LeaveTangent = 0;
+    UPROPERTY()
+    float ArriveTangentWeight = 0;
+    UPROPERTY()
+    float LeaveTangentWeight = 0;
+    UPROPERTY()
+    TEnumAsByte<ERichCurveTangentWeightMode> TangentWeightMode = RCTWM_WeightedNone;
+    uint8 UnserializedPaddingBytes[3] = {};
+
+    bool Serialize(FArchive& Ar);
 };
 
-DECLARE_BASE_STRUCTURE(FMovieSceneTangentData, "MovieSceneTangentData")
+template <>
+struct TStructOpsTypeTraits<FMovieSceneTangentData> : TStructOpsTypeTraitsBase2<FMovieSceneTangentData> {
+    enum { WithSerializer = true };
+};
+
+inline FArchive& operator<<(FArchive& Ar, FMovieSceneTangentData& Tangent) {
+    Tangent.Serialize(Ar);
+    return Ar;
+}
 
 }

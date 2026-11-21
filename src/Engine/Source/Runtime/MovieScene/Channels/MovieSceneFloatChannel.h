@@ -1,34 +1,72 @@
 #pragma once
 
-#include "Engine/Source/Runtime/Core/Containers/Array.h"
-#include "Engine/Source/Runtime/CoreUObject/UObject/NoExportTypes.h"
 #include "Engine/Source/Runtime/MovieScene/Channels/MovieSceneCurveChannelCommon.h"
+
+#include "MovieSceneFloatChannel.generated.h"
 
 namespace ue5parse::runtime {
 
+struct FPropertyTag;
+
+USTRUCT()
 struct FMovieSceneFloatValue {
+    GENERATED_BODY()
+
+    UPROPERTY()
     float Value = 0;
+    UPROPERTY()
     FMovieSceneTangentData Tangent;
-    TEnumAsByte<ERichCurveInterpMode> InterpMode = static_cast<ERichCurveInterpMode>(2);
-    TEnumAsByte<ERichCurveTangentMode> TangentMode = static_cast<ERichCurveTangentMode>(0);
+    UPROPERTY()
+    TEnumAsByte<ERichCurveInterpMode> InterpMode = RCIM_Cubic;
+    UPROPERTY()
+    TEnumAsByte<ERichCurveTangentMode> TangentMode = RCTM_Auto;
+    UPROPERTY()
     uint8 PaddingByte = 0;
-    bool operator==(const FMovieSceneFloatValue&) const = default;
+    uint8 UnserializedPaddingBytes[1] = {};
+
+    bool Serialize(FArchive& Ar);
 };
 
-struct FMovieSceneFloatChannel {
-    using ChannelValueType = FMovieSceneFloatValue;
+template <>
+struct TStructOpsTypeTraits<FMovieSceneFloatValue> : TStructOpsTypeTraitsBase2<FMovieSceneFloatValue> {
+    enum { WithSerializer = true };
+};
 
-    TEnumAsByte<ERichCurveExtrapolation> PreInfinityExtrap = static_cast<ERichCurveExtrapolation>(4);
-    TEnumAsByte<ERichCurveExtrapolation> PostInfinityExtrap = static_cast<ERichCurveExtrapolation>(4);
+inline FArchive& operator<<(FArchive& Ar, FMovieSceneFloatValue& Value) {
+    Value.Serialize(Ar);
+    return Ar;
+}
+
+USTRUCT()
+struct FMovieSceneFloatChannel : public FMovieSceneChannel {
+    GENERATED_BODY()
+
+    using ValueType = FMovieSceneFloatValue;
+
+    UPROPERTY()
+    TEnumAsByte<ERichCurveExtrapolation> PreInfinityExtrap = RCCE_Constant;
+    UPROPERTY()
+    TEnumAsByte<ERichCurveExtrapolation> PostInfinityExtrap = RCCE_Constant;
+    UPROPERTY()
     TArray<FFrameNumber> Times;
+    UPROPERTY()
     TArray<FMovieSceneFloatValue> Values;
+    UPROPERTY()
     float DefaultValue = 0;
+    UPROPERTY()
     bool bHasDefaultValue = false;
-    FFrameRate TickResolution{60000, 1};
-    bool operator==(const FMovieSceneFloatChannel&) const = default;
+    UPROPERTY()
+    FFrameRate TickResolution;
+    UPROPERTY()
+    bool bShowCurve = false;
+
+    bool Serialize(FArchive& Ar);
+    bool SerializeFromMismatchedTag(const FPropertyTag& Tag, FArchive& Ar);
 };
 
-DECLARE_BASE_STRUCTURE(FMovieSceneFloatValue, "MovieSceneFloatValue")
-DECLARE_BASE_STRUCTURE(FMovieSceneFloatChannel, "MovieSceneFloatChannel")
+template <>
+struct TStructOpsTypeTraits<FMovieSceneFloatChannel> : TStructOpsTypeTraitsBase2<FMovieSceneFloatChannel> {
+    enum { WithSerializer = true, WithSerializeFromMismatchedTag = true };
+};
 
 }

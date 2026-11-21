@@ -1,55 +1,25 @@
 #pragma once
 
 #include "Engine/Source/Runtime/CoreUObject/StructUtils/InstancedStruct.h"
-#include "Engine/Source/Runtime/CoreUObject/UObject/UObjectGlobals.h"
+
+#include "UniversalObjectLocatorFragment.generated.h"
 
 namespace ue5parse::runtime {
 
-class FUniversalObjectLocatorFragment {
-public:
-    const UScriptStruct* GetFragmentStruct() const { return Payload.GetScriptStruct(); }
-    const void* GetPayload() const { return Payload.GetMemory(); }
-    bool operator==(const FUniversalObjectLocatorFragment&) const = default;
+USTRUCT()
+struct FUniversalObjectLocatorEmptyPayload {
+    GENERATED_BODY()
+};
 
-    bool Serialize(FArchive& Ar) {
-        FName FragmentTypeID;
-        Ar << FragmentTypeID;
-        if (Ar.IsError())
-            return true;
-        if (FragmentTypeID.isNone()) {
-            Payload.Reset();
-            return true;
-        }
+USTRUCT()
+struct FUniversalObjectLocatorFragment {
+    GENERATED_BODY()
 
-        static constexpr struct {
-            FName ID;
-            FName PayloadName;
-        } Types[] = {
-            {"actor", "ActorLocatorFragment"},
-            {"asset", "AssetLocatorFragment"},
-            {"animinst", "AnimInstanceLocatorFragment"},
-            {"subobj", "SubObjectLocator"},
-            {"uobj", "DirectPathObjectLocator"},
-            {"ls_lazy_obj_ptr", "LegacyLazyObjectPtrFragment"},
-        };
-        for (const auto& Type : Types) {
-            if (Type.ID != FragmentTypeID)
-                continue;
-            const UScriptStruct* Struct = FindNativeStruct(Type.PayloadName);
-            if (Struct == nullptr) {
-                Ar.SetError(ErrorCode::MissingSchema, "UniversalObjectLocatorFragment.Payload");
-                return true;
-            }
-            Payload.InitializeAs(Struct);
-            Struct->SerializeItem(Ar, Payload.GetMutableMemory());
-            return true;
-        }
-        Ar.SetError(ErrorCode::MissingSchema, "UniversalObjectLocatorFragment.FragmentTypeID");
-        return true;
-    }
-
-private:
+    FName FragmentTypeID;
     FInstancedStruct Payload;
+
+    bool Serialize(FArchive& Ar);
+    bool operator==(const FUniversalObjectLocatorFragment& Other) const { return FragmentTypeID == Other.FragmentTypeID && Payload == Other.Payload; }
 };
 
 template <>
