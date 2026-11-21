@@ -25,6 +25,7 @@
 #include "Engine/Source/Runtime/MovieScene/Channels/MovieSceneFloatChannel.h"
 #include "Engine/Source/Runtime/MovieScene/Evaluation/MovieSceneEvaluationField.h"
 #include "Engine/Source/Runtime/MovieScene/Evaluation/MovieSceneEvalTemplateSerializer.h"
+#include "Engine/Source/Runtime/MovieScene/Evaluation/MovieSceneSequenceHierarchy.h"
 #include "Engine/Source/Runtime/MovieScene/MovieSceneFrameMigration.h"
 #include "Engine/Source/Runtime/MovieScene/Variants/MovieSceneTimeWarpVariant.h"
 #include "Engine/Source/Runtime/UniversalObjectLocator/UniversalObjectLocatorFragment.h"
@@ -555,6 +556,9 @@ const FNativeMember Box2DMembers[] = {MEMBER(FBox2D, "Min", "Struct:Vector2D", M
 const FNativeMember DateTimeMembers[] = {MEMBER(FDateTime, "Ticks", "int64", Ticks)};
 const FNativeMember TimespanMembers[] = {MEMBER(FTimespan, "Ticks", "int64", Ticks)};
 const FNativeMember RandomStreamMembers[] = {MEMBER(FRandomStream, "InitialSeed", "int32", InitialSeed), MEMBER(FRandomStream, "Seed", "int32", Seed)};
+const FCppStructOps MovieSceneSubSequenceTreeOps = TCppStructOps<FMovieSceneSubSequenceTree>();
+const FCppStructOps MovieSceneWarpCounterOps = TCppStructOps<FMovieSceneWarpCounter>();
+const FNativeMember MovieSceneWarpCounterMembers[] = {MEMBER(FMovieSceneWarpCounter, "WarpCounts", "Array<uint32>", WarpCounts)};
 const FNativeMember FrameNumberMembers[] = {MEMBER(FFrameNumber, "Value", "int32", Value)};
 const FNativeMember NiagaraTypeDefinitionHandleMembers[] = {MEMBER(FNiagaraTypeDefinitionHandle, "RegisteredTypeIndex", "int32", RegisteredTypeIndex)};
 const FCppStructOps NiagaraVariableCommonReferenceOps = TCppStructOps<FNiagaraVariableCommonReference>();
@@ -868,6 +872,8 @@ const FNativeStructInfo CoreStructs[] = {
     {"/Script/MovieScene", "MovieSceneTrackImplementationPtr", &MovieSceneInlineValueOps},
     {"/Script/MovieScene", "MovieSceneTimeWarpVariant", &MovieSceneTimeWarpVariantOps},
     {"/Script/MovieScene", "MovieSceneEvaluationKey", &Opaque12Ops},
+    {"/Script/MovieScene", "MovieSceneSubSequenceTree", &MovieSceneSubSequenceTreeOps},
+    {"/Script/MovieScene", "MovieSceneWarpCounter", &MovieSceneWarpCounterOps, MovieSceneWarpCounterMembers},
     {"/Script/MovieScene", "MovieSceneFrameRange", &MovieSceneFrameRangeOps},
     {"/Script/MovieScene", "MovieSceneEvaluationFieldEntityTree", &MovieSceneEvaluationFieldEntityTreeOps},
     {"/Script/MovieScene", "MovieSceneTangentData", &MovieSceneTangentDataOps, MovieSceneTangentDataMembers},
