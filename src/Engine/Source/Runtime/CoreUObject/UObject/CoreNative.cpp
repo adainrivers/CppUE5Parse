@@ -22,6 +22,7 @@
 #include "Engine/Source/Runtime/CoreUObject/UObject/UnrealTypePrivate.h"
 #include "Engine/Source/Runtime/MovieScene/Channels/MovieSceneDoubleChannel.h"
 #include "Engine/Source/Runtime/MovieScene/Channels/MovieSceneFloatChannel.h"
+#include "Engine/Source/Runtime/MovieScene/Evaluation/MovieSceneEvaluationField.h"
 #include "Engine/Source/Runtime/MovieScene/MovieSceneFrameMigration.h"
 #include "Engine/Source/Runtime/MovieScene/Variants/MovieSceneTimeWarpVariant.h"
 #include "Engine/Source/Runtime/UniversalObjectLocator/UniversalObjectLocatorFragment.h"
@@ -421,6 +422,7 @@ bool MovieSceneFrameRangeIdentical(const void* A, const void* B) {
     return *static_cast<const FMovieSceneFrameRange*>(A) == *static_cast<const FMovieSceneFrameRange*>(B);
 }
 const FCppStructOps MovieSceneFrameRangeOps = ObjectStructOps<FMovieSceneFrameRange>(&MovieSceneFrameRangeSerialize, &MovieSceneFrameRangeIdentical);
+const FCppStructOps MovieSceneEvaluationFieldEntityTreeOps = TCppStructOps<FMovieSceneEvaluationFieldEntityTree>();
 
 template <class T>
 bool OpIdenticalValues(const void* A, const void* B) {
@@ -875,6 +877,7 @@ const FNativeStructInfo CoreStructs[] = {
     {"/Script/MovieScene", "MovieSceneTimeWarpVariant", &MovieSceneTimeWarpVariantOps},
     {"/Script/MovieScene", "MovieSceneEvaluationKey", &Opaque12Ops},
     {"/Script/MovieScene", "MovieSceneFrameRange", &MovieSceneFrameRangeOps},
+    {"/Script/MovieScene", "MovieSceneEvaluationFieldEntityTree", &MovieSceneEvaluationFieldEntityTreeOps},
     {"/Script/MovieScene", "MovieSceneTangentData", &MovieSceneTangentDataOps, MovieSceneTangentDataMembers},
     {"/Script/MovieScene", "MovieSceneDoubleValue", &MovieSceneDoubleValueOps, MovieSceneDoubleValueMembers},
     {"/Script/MovieScene", "MovieSceneDoubleChannel", &MovieSceneDoubleChannelOps, MovieSceneDoubleChannelMembers},
