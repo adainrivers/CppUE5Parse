@@ -26,6 +26,7 @@
 #include "Engine/Source/Runtime/MovieScene/Evaluation/MovieSceneEvaluationField.h"
 #include "Engine/Source/Runtime/MovieScene/Evaluation/MovieSceneSequenceHierarchy.h"
 #include "Engine/Source/Runtime/MovieScene/Evaluation/MovieSceneEvalTemplateSerializer.h"
+#include "Engine/Source/Runtime/MovieSceneTracks/Sections/MovieSceneEventSection.h"
 #include "Engine/Source/Runtime/MovieScene/MovieSceneFrameMigration.h"
 #include "Engine/Source/Runtime/MovieScene/Variants/MovieSceneTimeWarpVariant.h"
 #include "Engine/Source/Runtime/UniversalObjectLocator/UniversalObjectLocatorFragment.h"
@@ -502,6 +503,7 @@ const FCppStructOps NiagaraVariableWithOffsetOps =
     ObjectStructOps<FNiagaraVariableWithOffset>(&NiagaraVariableWithOffsetSerialize, &OpIdenticalValues<FNiagaraVariableWithOffset>);
 const FCppStructOps MovieSceneInlineValueOps = TCppStructOps<FMovieSceneInlineValue>();
 const FCppStructOps MovieSceneTimeWarpVariantOps = TCppStructOps<FMovieSceneTimeWarpVariant>();
+const FCppStructOps MovieSceneEventParametersOps = TCppStructOps<FMovieSceneEventParameters>();
 const FCppStructOps Opaque4Ops = OpaqueStructOps<4>();
 const FCppStructOps Opaque8Ops = OpaqueStructOps<8>();
 const FCppStructOps Opaque12Ops = OpaqueStructOps<12>();
@@ -867,6 +869,7 @@ const FNativeStructInfo CoreStructs[] = {
     {CoreUObjectPackage, "InterpCurvePointQuat", &InterpCurvePointQuatOps, InterpCurvePointQuatMembers},
     {CoreUObjectPackage, "InterpCurveQuat", &InterpCurveQuatOps, InterpCurveQuatMembers},
     {"/Script/SlateCore", "DeprecateSlateVector2D", &Opaque8Ops},
+    {"/Script/MovieSceneTracks", "MovieSceneEventParameters", &MovieSceneEventParametersOps},
     {"/Script/NavigationSystem", "NavAgentSelector", &Opaque4Ops},
     {"/Script/MovieScene", "MovieSceneEvalTemplatePtr", &MovieSceneInlineValueOps},
     {"/Script/MovieScene", "MovieSceneTrackImplementationPtr", &MovieSceneInlineValueOps},
