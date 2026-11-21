@@ -5,10 +5,6 @@
 #include <string_view>
 #include <vector>
 
-#include "Engine/Plugins/Animation/ControlRig/Source/ControlRig/ControlRigOverride.h"
-#include "Engine/Source/Runtime/MovieScene/Variants/MovieSceneTimeWarpVariant.h"
-#include "Engine/Source/Runtime/MovieSceneTracks/Sections/MovieSceneEventSection.h"
-
 #include "Engine/Source/Runtime/Core/Math/Axis.h"
 #include "Engine/Source/Runtime/Core/Math/InterpCurve.h"
 #include "Engine/Source/Runtime/Core/PixelFormat.h"
@@ -702,15 +698,9 @@ const FNativeEnumInfo CoreEnums[] = {
     {CoreUObjectPackage, "EPixelFormat", PixelFormatNames},
 };
 
-const FCppStructOps MovieSceneTimeWarpVariantOps = TCppStructOps<FMovieSceneTimeWarpVariant>();
-const FCppStructOps MovieSceneEventParametersOps = TCppStructOps<FMovieSceneEventParameters>();
-const FCppStructOps ControlRigOverrideContainerOps = TCppStructOps<FControlRigOverrideContainer>();
 const FNativeMember InstancedPropertyBagMembers[] = {{"Value", "Struct:InstancedStruct", FInstancedPropertyBag::GetValueOffset(), sizeof(FInstancedStruct)}};
 
 const FNativeStructInfo CoreStructs[] = {
-    {"/Script/ControlRig", "ControlRigOverrideContainer", &ControlRigOverrideContainerOps},
-    {"/Script/MovieSceneTracks", "MovieSceneEventParameters", &MovieSceneEventParametersOps},
-    {"/Script/MovieScene", "MovieSceneTimeWarpVariant", &MovieSceneTimeWarpVariantOps},
     {CoreUObjectPackage, "Vector", &VectorOps, VectorMembers},
     {CoreUObjectPackage, "Vector3d", &VectorOps, VectorMembers},
     {CoreUObjectPackage, "Vector2D", &Vector2DOps, Vector2DMembers},
