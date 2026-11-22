@@ -1,6 +1,8 @@
 #pragma once
 
-#include "Engine/Source/Runtime/CoreUObject/UObject/PropertyAccess.h"
+#include <limits>
+
+#include "Engine/Source/Runtime/CoreUObject/UObject/Object.h"
 #include "Engine/Source/Runtime/Engine/Rendering/MorphTargetVertexCodec.h"
 
 #include "MorphTarget.generated.h"
@@ -10,11 +12,18 @@ namespace ue5parse::runtime {
 class USkeletalMesh;
 
 struct FMorphTargetDelta {
-    FVector3f PositionDelta{};
-    FVector3f TangentZDelta{};
-    uint32 SourceIdx = 0;
+    FVector3f PositionDelta = FVector3f(0, 0, 0);
+    FVector3f TangentZDelta = FVector3f(0, 0, 0);
+    uint32 SourceIdx = std::numeric_limits<uint32>::max();
 
-    friend FArchive& operator<<(FArchive& Ar, FMorphTargetDelta& D);
+    friend FArchive& operator<<(FArchive& Ar, FMorphTargetDelta& V);
+};
+
+struct FMorphTargetCompressedLODModel {
+    TArray<UE::MorphTargetVertexCodec::FDeltaBatchHeader> PackedDeltaHeaders;
+    TArray<uint32> PackedDeltaData;
+    float PositionPrecision = 0.0f;
+    float TangentPrecision = 0.0f;
 };
 
 struct FMorphTargetLODModel {
@@ -28,27 +37,24 @@ struct FMorphTargetLODModel {
     friend FArchive& operator<<(FArchive& Ar, FMorphTargetLODModel& M);
 };
 
-struct FMorphTargetCompressedLODModel {
-    TArray<MorphTargetVertexCodec::FDeltaBatchHeader> PackedDeltaHeaders;
-    TArray<uint32> PackedDeltaData;
-    float PositionPrecision = 0;
-    float TangentPrecision = 0;
-
-    friend FArchive& operator<<(FArchive& Ar, FMorphTargetCompressedLODModel& M) {
-        return Ar << M.PackedDeltaHeaders << M.PackedDeltaData << M.PositionPrecision << M.TangentPrecision;
-    }
-};
-
 UCLASS()
 class UMorphTarget : public UObject {
     GENERATED_BODY()
 public:
     UPROPERTY()
     TObjectPtr<USkeletalMesh> BaseSkelMesh = nullptr;
+
+    void Serialize(FArchive& Ar) override;
+
+    const TArray<FMorphTargetLODModel>& GetMorphLODModels() const { return MorphLODModels; }
+    const TArray<FMorphTargetCompressedLODModel>& GetCompressedLODModels() const { return CompressedLODModels; }
+
+protected:
     TArray<FMorphTargetLODModel> MorphLODModels;
     TArray<FMorphTargetCompressedLODModel> CompressedLODModels;
 
-    void Serialize(FArchive& Ar) override;
+private:
+    void ScaleRocoKingdomWorldDeltas(FArchive& Ar);
 };
 
 }

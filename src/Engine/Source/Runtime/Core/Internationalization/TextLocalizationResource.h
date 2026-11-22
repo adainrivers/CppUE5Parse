@@ -1,33 +1,44 @@
 #pragma once
 
-#include <vector>
-
+#include "Engine/Source/Runtime/Core/Containers/Map.h"
 #include "Engine/Source/Runtime/Core/Containers/UnrealString.h"
 
 namespace ue5parse::runtime {
 
 class FArchive;
 
+enum class ELocResVersion : uint8 {
+    Legacy = 0,
+    Compact,
+    Optimized_CRC32,
+    Optimized_CityHash64_UTF16,
+    LatestPlusOne,
+    Latest = LatestPlusOne - 1
+};
+
+struct FTextId {
+    FString Namespace;
+    FString Key;
+    bool operator==(const FTextId& Other) const = default;
+};
+
+inline uint32 GetTypeHash(const FTextId& Id) { return HashCombine(GetTypeHash(Id.Namespace), GetTypeHash(Id.Key)); }
+
 class FTextLocalizationResource {
 public:
     struct FEntry {
-        FString Key;
+        FString LocResID;
         uint32 SourceStringHash = 0;
-        int32 StringIndex = INDEX_NONE;
+        FString LocalizedString;
     };
 
-    struct FNamespace {
-        FString Name;
-        std::vector<FEntry> Entries;
-    };
-
-    bool LoadFromArchive(FArchive& Ar);
-    const std::vector<FNamespace>& GetNamespaces() const { return Namespaces; }
-    const FString* GetLocalizedString(const FEntry& Entry) const;
+    //! The resource path selects the string encryption of Neverness to Everness and Code Vein II.
+    bool LoadFromArchive(FArchive& Archive, const FString& LocResID);
+    const FEntry* FindEntry(const FTextId& Id) const { return Entries.Find(Id); }
+    const TMap<FTextId, FEntry>& GetEntries() const { return Entries; }
 
 private:
-    std::vector<FNamespace> Namespaces;
-    std::vector<FString> Strings;
+    TMap<FTextId, FEntry> Entries;
 };
 
 }

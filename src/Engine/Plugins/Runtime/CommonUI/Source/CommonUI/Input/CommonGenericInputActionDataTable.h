@@ -10,9 +10,7 @@ UCLASS()
 class UCommonGenericInputActionDataTable : public UDataTable {
     GENERATED_BODY()
 public:
-    UCommonGenericInputActionDataTable() {
-        RowStruct = FindNativeStruct(FName("CommonInputActionDataBase"));
-    }
+    explicit UCommonGenericInputActionDataTable(const FObjectInitializer& ObjectInitializer);
 };
 
 }
